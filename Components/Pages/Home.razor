@@ -1,0 +1,90 @@
+﻿@page "/"
+@using Plugin.BLE.Abstractions.Contracts
+@inject MauiApp1.BleManager BleManager
+
+<h3>BLE Demo</h3>
+
+<p>
+    <button @onclick="Scan">🔍 Сканировать устройства</button>
+    <button @onclick="DisconnectDevice" disabled="@(!canDisconnect)">🔌 Отключить устройство</button>
+</p>
+
+@if (!string.IsNullOrEmpty(status))
+{
+    <p><em>@status</em></p>
+}
+
+@if (devices?.Count > 0)
+{
+    <h4>Найденные устройства:</h4>
+    <ul>
+        @foreach (var d in devices)
+        {
+            <li>
+                <button @onclick="@(() => Connect(d))">@d.Name (@d.Id)</button>
+            </li>
+        }
+    </ul>
+}
+
+@if (canSend)
+{
+    <button @onclick="SendSample">📨 Отправить команду</button>
+}
+
+@if (!string.IsNullOrEmpty(received))
+{
+    <p><strong>Получено (hex):</strong> @received</p>
+}
+
+@code {
+    string status;
+    string received;
+    bool canSend = false;
+    List<IDevice> devices = new();
+    bool canDisconnect = false;
+    protected override void OnInitialized()
+    {
+        BleManager.OnStatusUpdated += s =>
+        {
+            status = s;
+            InvokeAsync(StateHasChanged);
+        };
+
+        BleManager.OnMessageReceived += m =>
+        {
+            received = m;
+            InvokeAsync(StateHasChanged);
+        };
+
+        BleManager.OnDevicesUpdated += list =>
+        {
+            devices = list.ToList();
+            InvokeAsync(StateHasChanged);
+        };
+    }
+
+    async Task Scan()
+    {
+        canSend = false;
+        await BleManager.ScanAsync();
+    }
+
+    async Task Connect(IDevice device)
+    {
+        await BleManager.ConnectToDeviceAsync(device);
+        canSend = true;
+        canDisconnect = true; // Включаем возможность отключения
+    }
+
+    async Task SendSample()
+    {
+        byte[] data = new byte[] { 0x50, 0x04, 0x00, 0x00, 0x00, 0x34 };
+        await BleManager.SendBytesAsync(data);
+    }
+    async Task DisconnectDevice()
+    {
+        await BleManager.DisconnectAsync();
+        canDisconnect = false; // Выключаем кнопку после отключения
+    }
+}
